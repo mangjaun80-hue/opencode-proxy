@@ -14,8 +14,20 @@ const PORT = process.env.PORT || 3000;
 const API_KEYS = process.env.API_KEYS?.split(',').map(k => k.trim()) || [];
 const PROVIDERS = {
   openai: process.env.OPENAI_API_BASE || 'https://api.openai.com',
-  anthropic: process.env.ANTHROPIC_API_BASE || 'https://api.anthropic.com'
+  anthropic: process.env.ANTHROPIC_API_BASE || 'https://api.anthropic.com',
+  openrouter: 'https://openrouter.ai/api'
 };
+
+// Fungsi untuk detect provider berdasarkan API key
+function detectProvider(apiKey) {
+  if (apiKey.startsWith('sk-or-v1-')) {
+    return 'openrouter';
+  }
+  if (apiKey.startsWith('sk-ant-')) {
+    return 'anthropic';
+  }
+  return 'openai';
+}
 
 // State untuk round-robin
 let keyIndex = 0;
@@ -61,18 +73,22 @@ app.post('/v1/chat/completions', async (req, res) => {
   try {
     const apiKey = getNextKey();
     const { model, messages, ...options } = req.body;
+    const provider = detectProvider(apiKey);
+    const baseUrl = PROVIDERS[provider];
     
-    console.log(`[${new Date().toISOString()}] Request ke OpenAI-compatible API`);
+    console.log(`[${new Date().toISOString()}] Request ke ${provider.toUpperCase()} API`);
     console.log(`  Model: ${model}`);
     console.log(`  Messages: ${messages.length}`);
     
     const response = await makeRequest(
-      `${PROVIDERS.openai}/v1/chat/completions`,
+      `${baseUrl}/v1/chat/completions`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://opencode-proxy.railway.app',
+          'X-Title': 'OpenCode Proxy'
         }
       },
       { model, messages, ...options }
@@ -127,12 +143,17 @@ app.get('/health', (req, res) => {
 app.get('/v1/models', async (req, res) => {
   try {
     const apiKey = getNextKey();
+    const provider = detectProvider(apiKey);
+    const baseUrl = PROVIDERS[provider];
+    
     const response = await makeRequest(
-      `${PROVIDERS.openai}/v1/models`,
+      `${baseUrl}/v1/models`,
       {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://opencode-proxy.railway.app',
+          'X-Title': 'OpenCode Proxy'
         }
       }
     );
